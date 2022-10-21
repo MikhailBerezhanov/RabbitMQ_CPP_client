@@ -8,6 +8,7 @@ extern "C"{
 }
 
 #include <thread>
+#include <atomic>
 
 #include "my_handler.hpp"
 
@@ -24,6 +25,7 @@ struct MyTcpHandler::Impl
 	fd_set readfds;
 	int fd = -1;
 	int flags = 0;
+	std::atomic<bool> quit{false};
 };
 
 
@@ -58,11 +60,6 @@ void MyTcpHandler::monitor(AMQP::TcpConnection *connection, int fd, int flags)
 	//  readable and/or writable, it is up to you to inform the AMQP-CPP
 	//  library that the filedescriptor is active by calling the
 	//  connection->process(fd, flags) method.
-	
-
-	// if( !flags ){
-	// 	return;
-	// }
 
 	if(flags & AMQP::readable){
 		pimpl->fd = fd;
@@ -78,13 +75,15 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 	struct timeval timeout;
 	int max_fd = 1;
 
+	constexpr int ms = 100 * 1000;	// 100 ms
+
 	for(;;){
 
 		FD_ZERO(&pimpl->readfds);
 		FD_SET(pimpl->fd, &pimpl->readfds);
 
-		timeout.tv_sec = 1;
-		timeout.tv_usec = 0;
+		timeout.tv_sec = 0;
+		timeout.tv_usec = ms;
 
 		if(pimpl->fd > -1){
 			max_fd = pimpl->fd + 1;
@@ -100,10 +99,19 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		}
 		else if( !FD_ISSET(pimpl->fd, &pimpl->readfds) ){
 			// Timeout
+			if(pimpl->quit.load()){
+				return;
+			}
+
 			continue;
 		}
 
 		// Filedescriptor is ready for I\O
 		connection->process(pimpl->fd, pimpl->flags);
 	}
+}
+
+void MyTcpHandler::quit()
+{
+	pimpl->quit.store(true);
 }

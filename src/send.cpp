@@ -23,24 +23,28 @@ int main(int argc, char* argv[])
 
 	channel.onError([](const char* message)
 	{
-	    cout << "Channel error: " << message << endl;
+		cout << "Channel error: " << message << endl;
 	});
 	channel.onReady([&]()
 	{
 		cout << "Channel is ready" << endl;
 
+		// 			(exchange, rounting_key, body, flags)
 		channel.publish("", "hello", "Hello World!");
-		std::cout << " [x] Sent 'Hello World!'" << std::endl;
+		std::cout << " [x] Sent 'Hello World!' to 'hello' queue" << std::endl;
+		
+		myHandler.quit();
 		channel.close();
 	});
 
 	// use the channel object to call the AMQP method you like
 
-	channel.declareExchange("hello-exchange", AMQP::fanout);
+	// channel.declareExchange("hello-exchange", AMQP::fanout);
+	// Use default exhange
 	channel.declareQueue("hello");
-	channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
+	// channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
 
-    myHandler.loop(&connection);
+	myHandler.loop(&connection);
 	
 	return 0;
 }

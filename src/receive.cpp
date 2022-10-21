@@ -32,10 +32,13 @@ int main(int argc, char* argv[])
 
 	// use the channel object to call the AMQP method you like
 
-	channel.declareExchange("hello-exchange", AMQP::fanout);
+	// channel.declareExchange("hello-exchange", AMQP::fanout);
+	// Use default exhange
 	channel.declareQueue("hello");
-	channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
+	// channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
 
+	// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
+	// Server will see that the message was acked and can delete it from the queue.
 	channel.consume("hello", AMQP::noack).onReceived(
 			[](const AMQP::Message &message,
 				uint64_t deliveryTag,

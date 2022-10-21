@@ -21,6 +21,8 @@ public:
 
 	void loop(AMQP::TcpConnection *connection);
 
+	void quit();
+
 private:
 
 	// IMPL forward declaration

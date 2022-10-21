@@ -6,8 +6,12 @@ target_link_libraries(myhandler amqpcpp)
 
 # tutorials' binaries
 set(BINS	
-		produce
-        consume
+    # Tutorial 1: 'Hello world' 
+	send
+    receive
+    # Tutoril 2: Work Queues
+    new_task
+    worker
 )
 
 foreach(item ${BINS})
