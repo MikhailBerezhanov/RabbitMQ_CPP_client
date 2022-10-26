@@ -151,4 +151,29 @@ private:
 	} 
 
 	virtual void monitor(AMQP::TcpConnection *connection, int fd, int flags) override;
+
+	// The AMQP protocol supports heartbeats. If this heartbeat feature is enabled, 
+	// the client and the server negotiate a heartbeat interval during connection setup, 
+	// and they agree to send at least some kind of data over the connection during every 
+	// iteration of that interval. The normal data that is sent over the connection 
+	// (like publishing or consuming messages) is normally sufficient to keep the connection
+	// alive, but if the client or server was idle during the negotiated interval time, 
+	// a dummy heartbeat message must be sent instead.
+
+	/**
+     *  Method that is called when the server tries to negotiate a heartbeat
+     *  interval, and that is overridden to get rid of the default implementation
+     *  (which vetoes the suggested heartbeat interval), and accept the interval
+     *  instead.
+     *  @param  connection      The connection on which the error occurred
+     *  @param  interval        The suggested interval in seconds
+     */
+    virtual uint16_t onNegotiate(AMQP::TcpConnection *connection, uint16_t interval);
+
+	 /**
+	 *  Method that is called when the server sends a heartbeat to the client
+	 *  @param  connection      The connection over which the heartbeat was received
+	 *  @see    ConnectionHandler::onHeartbeat
+	 */
+	virtual void onHeartbeat(AMQP::TcpConnection *connection);
 };

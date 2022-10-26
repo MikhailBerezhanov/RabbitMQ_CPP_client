@@ -2,5 +2,18 @@ cmake_minimum_required(VERSION 3.4)
 
 project(RabbitMQ-tutorial)
 
-# include_directories()
+# specify the C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+# Options section 
+add_compile_options(
+	-O2
+	-Wall 
+)
+
+# Build Logger module
+add_subdirectory(src/logger/cpp_src)
+
+# Build tutorials 
 add_subdirectory(src)

@@ -1,0 +1,3 @@
+[submodule "src/logger"]
+	path = src/logger
+	url = git@bitbucket.org:societysys_team/logger.git

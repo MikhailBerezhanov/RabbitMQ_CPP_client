@@ -3,19 +3,21 @@
 #include <amqpcpp.h>
 #include <amqpcpp/linux_tcp.h>
 
+#include "utils.hpp"
 #include "logger.hpp"
 #include "my_handler.hpp"
 
 using namespace std;
 
 /*
-	Tutorial #1: Hello world
+	Tutorial #3: Publish/Subscribe
 */
-
 
 int main(int argc, char* argv[])
 {
 	logger.init(MSG_TRACE);
+
+	std::string payload = argc > 1 ? utils::join(&argv[1], &argv[argc], " ") : "payload";
 
 	// address of the server
 	AMQP::Address address("amqp://guest:guest@localhost/");
@@ -31,24 +33,25 @@ int main(int argc, char* argv[])
 	{
 		 logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 	});
-	channel.onReady([&]()
-	{
-		logger.msg(MSG_DEBUG, "Channel is ready\n");
-
-		// 			(exchange, rounting_key, body, flags)
-		channel.publish("", "hello", "Hello World!");
-		logger.msg(MSG_DEBUG, "[x] Sent 'Hello World!' to 'hello' queue\n");
-		
-		myHandler.quit();
-		channel.close();
-	});
 
 	// use the channel object to call the AMQP method you like
 
-	// channel.declareExchange("hello-exchange", AMQP::fanout);
-	// Use default exhange
-	channel.declareQueue("hello");
-	// channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
+	// Create fanout exchange (routes message to every binded queue)
+	// ** to see excnahes use:
+	//
+	// sudo rabbitmqctl list_exchanges
+	//
+	channel.declareExchange("logs", AMQP::fanout)
+		.onSuccess([&]()
+		{
+			// 	publish(exchange, rounting_key, message, flags)
+			channel.publish("logs", "", payload);
+			logger.msg(MSG_DEBUG, "[x] Sent '%s' to logs exchange\n", payload);
+		
+			myHandler.quit();
+			channel.close();
+		}
+	);
 
 	myHandler.loop(&connection);
 	

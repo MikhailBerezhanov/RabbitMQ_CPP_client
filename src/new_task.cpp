@@ -4,7 +4,12 @@
 #include <amqpcpp/linux_tcp.h>
 
 #include "utils.hpp"
+#include "logger.hpp"
 #include "my_handler.hpp"
+
+/*
+	Tutorial #2: Task queue
+*/
 
 using namespace std;
 
@@ -18,6 +23,8 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
+	logger.init(MSG_TRACE);
+
 	// 'Heavy' message to be processed by workers 
 	std::string payload = argc > 1 ? utils::join(&argv[1], &argv[argc], " ") : "NewTask message";
 
@@ -39,14 +46,15 @@ int main(int argc, char* argv[])
 
 		AMQP::Envelope env(payload.c_str(), payload.size());
 
-		// Our queue os durable (survives server reboots), so
-		// mark our message persistant to let queue store and save it.
+		// Our queue is declared as durable (survives server reboots), so
+		// our message should be marked as persistant to let queue store and 
+		// save it. 
 		// Delivery mode (non-persistent (1) or persistent (2))
 		env.setDeliveryMode(2);
 
 		// 			(exchange, rounting_key, body, flags)
 		channel.publish("", "task_queue", env);
-		std::cout << " [x] Sent '" << env.body() << "' to 'task_queue'" << std::endl;
+		logger.msg(MSG_DEBUG,  "[x] Sent '%s' to 'task_queue'", env.body());
 		
 		myHandler.quit();
 		channel.close();
@@ -54,6 +62,17 @@ int main(int argc, char* argv[])
 
 	// use the channel object to call the AMQP method you like
 	// Use default exhange
+
+	// When RabbitMQ quits or crashes it will forget the queues and messages 
+	// unless you tell it not to. Two things are required to make sure that 
+	// messages aren't lost: we need to mark both the queue and messages as durable.
+	//
+	// First, we need to make sure that the queue will survive a RabbitMQ node restart. 
+	// In order to do so, we need to declare it as durable:
+	//
+	// Second, we need to mark our messages as persistent - by supplying a 
+	// delivery_mode property with the value of 2.
+
 	// Make queue durable (messages will be saved on server's disk)
 	channel.declareQueue("task_queue", AMQP::durable).onSuccess(callback);
 

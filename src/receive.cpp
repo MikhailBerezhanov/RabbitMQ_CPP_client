@@ -1,16 +1,22 @@
 #include <iostream>
+#include <string_view>
 
 #include <amqpcpp.h>
 #include <amqpcpp/linux_tcp.h>
 
+#include "logger.hpp"
 #include "my_handler.hpp"
 
 using namespace std;
 
-
+/*
+	Tutorial #1: Hello world
+*/
 
 int main(int argc, char* argv[])
 {
+	logger.init(MSG_TRACE);
+
 	// address of the server
 	AMQP::Address address("amqp://guest:guest@localhost/");
 
@@ -23,11 +29,11 @@ int main(int argc, char* argv[])
 
 	channel.onError([](const char* message)
 	{
-	    cout << "Channel error: " << message << endl;
+	    logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 	});
-	channel.onReady([&]()
+	channel.onReady([]()
 	{
-		cout << "Channel is ready" << endl;
+		logger.msg(MSG_DEBUG, "Channel is ready\n");
 	});
 
 	// use the channel object to call the AMQP method you like
@@ -39,16 +45,15 @@ int main(int argc, char* argv[])
 
 	// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
 	// Server will see that the message was acked and can delete it from the queue.
-	channel.consume("hello", AMQP::noack).onReceived(
-			[](const AMQP::Message &message,
-				uint64_t deliveryTag,
-				bool redelivered)
-			{
-			    std::cout <<" [x] Received (" << message.bodySize() << " bytes)" << message.body() << std::endl;
-			}
+	channel.consume("hello", AMQP::noack)
+		.onReceived([](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered)
+		{
+			std::string_view body(message.body(), message.bodySize());
+		    logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
+		}
 	);
 
-	std::cout << " [*] Waiting for messages. To exit press CTRL-C\n";
+	logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
     myHandler.loop(&connection);
 	
 	return 0;

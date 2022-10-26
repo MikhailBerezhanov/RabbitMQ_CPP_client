@@ -10,6 +10,7 @@ extern "C"{
 #include <thread>
 #include <atomic>
 
+#include "logger.hpp"
 #include "my_handler.hpp"
 
 
@@ -67,6 +68,27 @@ void MyTcpHandler::monitor(AMQP::TcpConnection *connection, int fd, int flags)
 
 		FD_SET(pimpl->fd, &pimpl->readfds);
 	}
+}
+
+uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t interval)
+{
+	// we accept the suggestion from the server, but if the interval is smaller
+	// that one minute, we will use a one minute interval instead
+	if (interval < 60) interval = 60;
+
+	// @todo
+	//  set a timer in your event loop, and make sure that you call
+	//  connection->heartbeat() every _interval_ seconds if no other
+	//  instruction was sent in that period.
+
+	// return the interval that we want to use
+	return interval;
+}
+
+void MyTcpHandler::onHeartbeat(AMQP::TcpConnection *connection)
+{
+	logger.msg(MSG_DEBUG, "heartbeat\n");
+	connection->heartbeat();
 }
 
 // TODO: spawn independent thread for the loop
