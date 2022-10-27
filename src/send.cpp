@@ -41,6 +41,7 @@ int main(int argc, char* argv[])
 		
 		myHandler.quit();
 		channel.close();
+		connection.close();
 	});
 
 	// use the channel object to call the AMQP method you like

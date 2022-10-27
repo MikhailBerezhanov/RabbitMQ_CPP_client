@@ -97,7 +97,7 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 	struct timeval timeout;
 	int max_fd = 1;
 
-	constexpr int ms = 100 * 1000;	// 100 ms
+	constexpr int ms = 100'1000;	// 100 ms
 
 	for(;;){
 
@@ -116,7 +116,11 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		int res = select(max_fd, &pimpl->readfds, nullptr, nullptr, &timeout);
 		
 		if(res < 0 /*&& errno == EINTR*/){
-			std::cerr << "MyTcpHanler::loop: select() failed: " << strerror(errno) << std::endl;
+
+			if( !pimpl->quit.load() ){
+				std::cerr << "MyTcpHanler::loop: select() failed: " << strerror(errno) << std::endl;
+			}
+			
 			return;
 		}
 		else if( !FD_ISSET(pimpl->fd, &pimpl->readfds) ){
@@ -137,3 +141,94 @@ void MyTcpHandler::quit()
 {
 	pimpl->quit.store(true);
 }
+
+
+// Opening methods
+
+/**
+ *  Method that is called by the AMQP library when the TCP connection 
+ *  has been established. After this method has been called, the library
+ *  still has take care of setting up the optional TLS layer and of
+ *  setting up the AMQP connection on top of the TCP layer., This method 
+ *  is always paired with a later call to onLost().
+ *  @param  connection      The connection that can now be used
+ */
+void MyTcpHandler::onConnected(AMQP::TcpConnection *connection) 
+{
+	// @todo
+	//  add your own implementation (probably not needed)
+	std::cout << "onConnected" << std::endl;
+}
+
+/**
+ *  Method that is called by the AMQP library when the login attempt
+ *  succeeded. After this the connection is ready to use.
+ *  @param  connection      The connection that can now be used
+ */
+void MyTcpHandler::onReady(AMQP::TcpConnection *connection) 
+{
+	// @todo
+	//  add your own implementation, for example by creating a channel
+	//  instance, and start publishing or consuming
+	std::cout << "onReady" << std::endl;
+}
+
+
+
+// Closing methods
+
+void MyTcpHandler::onError(AMQP::TcpConnection *connection, const char *message) 
+{
+	// @todo
+	//  add your own implementation, for example by reporting the error
+	//  to the user of your program and logging the error
+	std::cerr << "onError: " << message << std::endl;
+}
+
+/**
+ * Soft closing (when connection.close() method called)
+ *  Method that is called when the AMQP protocol is ended. This is the
+ *  counter-part of a call to connection.close() to graceful shutdown
+ *  the connection. Note that the TCP connection is at this time still 
+ *  active, and you will also receive calls to onLost() and onDetached()
+ *  @param  connection      The connection over which the AMQP protocol ended
+ */
+void MyTcpHandler::onClosed(AMQP::TcpConnection *connection)  
+{
+    // @todo
+    //  add your own implementation (probably not necessary, but it could
+    //  be useful if you want to do some something immediately after the
+    //  amqp connection is over, but do not want to wait for the tcp 
+    //  connection to shut down
+    std::cout << "onClosed" << std::endl;
+}
+
+/**
+ *  Method that is called when the TCP connection was closed or lost.
+ *  This method is always called if there was also a call to onConnected()
+ *  @param  connection      The connection that was closed and that is now unusable
+ */
+void MyTcpHandler::onLost(AMQP::TcpConnection *connection)  
+{
+	// @todo
+	//  add your own implementation (probably not necessary)
+	std::cout << "onLost" << std::endl;
+
+	// We've been connected already, event loop is running by 
+	// current time - stop it gently. 
+	this->quit();
+
+	// TODO: Try to perform auto-reconnect. 
+}
+
+/**
+ *  Final method that is called. This signals that no further calls to your
+ *  handler will be made about the connection.
+ *  @param  connection      The connection that can be destructed
+ */
+void MyTcpHandler::onDetached(AMQP::TcpConnection *connection)  
+{
+	// @todo
+	//  add your own implementation, like cleanup resources or exit the application
+	std::cout << "onDetached" << std::endl;
+} 

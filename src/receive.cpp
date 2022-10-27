@@ -18,10 +18,13 @@ int main(int argc, char* argv[])
 	logger.init(MSG_TRACE);
 
 	// address of the server
-	AMQP::Address address("amqp://guest:guest@localhost/");
+	std::string addr = argc > 1 ? argv[1] : "amqp://guest:guest@localhost/";
+
+	AMQP::Address address(addr);
 
 	// create a AMQP connection object
 	MyTcpHandler myHandler;
+	logger.msg(MSG_DEBUG, "Connecting to '%s'\n", addr);
 	AMQP::TcpConnection connection(&myHandler, address);
 
 	// and create a channel
@@ -31,6 +34,7 @@ int main(int argc, char* argv[])
 	{
 	    logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 	});
+
 	channel.onReady([]()
 	{
 		logger.msg(MSG_DEBUG, "Channel is ready\n");
@@ -38,10 +42,8 @@ int main(int argc, char* argv[])
 
 	// use the channel object to call the AMQP method you like
 
-	// channel.declareExchange("hello-exchange", AMQP::fanout);
-	// Use default exhange
+	// Use default exhange ("", direct)
 	channel.declareQueue("hello");
-	// channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
 
 	// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
 	// Server will see that the message was acked and can delete it from the queue.
