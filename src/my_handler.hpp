@@ -23,7 +23,7 @@ public:
 
 	void quit();
 
-	// std::function<void()> onConnectionLoss;
+	bool connection_was_lost() const;
 
 private:
 

@@ -26,7 +26,8 @@ struct MyTcpHandler::Impl
 	fd_set readfds;
 	int fd = -1;
 	int flags = 0;
-	std::atomic<bool> quit{false};
+	std::atomic<bool> quit{false}; 	// break event loop
+	std::atomic<bool> lost{false};	// connection was lost
 };
 
 
@@ -92,12 +93,17 @@ void MyTcpHandler::onHeartbeat(AMQP::TcpConnection *connection)
 }
 
 // TODO: spawn independent thread for the loop
+//
+// TODO: make connection auto-reconnect - use pointer to pointer or shared_ptr
+//
 void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 {
 	struct timeval timeout;
 	int max_fd = 1;
 
 	constexpr int ms = 100'1000;	// 100 ms
+
+	pimpl->quit.store(false);
 
 	for(;;){
 
@@ -117,7 +123,7 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		
 		if(res < 0 /*&& errno == EINTR*/){
 
-			if( !pimpl->quit.load() ){
+			if( !this->connection_was_lost() ){
 				std::cerr << "MyTcpHanler::loop: select() failed: " << strerror(errno) << std::endl;
 			}
 			
@@ -140,6 +146,17 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 void MyTcpHandler::quit()
 {
 	pimpl->quit.store(true);
+}
+
+bool MyTcpHandler::connection_was_lost() const
+{
+	bool res = pimpl->lost.load();
+
+	if(res){
+		pimpl->lost.store(false);
+	}
+
+	return res;
 }
 
 
@@ -213,6 +230,7 @@ void MyTcpHandler::onLost(AMQP::TcpConnection *connection)
 	// @todo
 	//  add your own implementation (probably not necessary)
 	std::cout << "onLost" << std::endl;
+	pimpl->lost.store(true);
 
 	// We've been connected already, event loop is running by 
 	// current time - stop it gently. 

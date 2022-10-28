@@ -12,6 +12,12 @@ add_compile_options(
 	-Wall 
 )
 
+# Check target system
+if(CMAKE_SYSTEM_PROCESSOR MATCHES ARM)
+   message(STATUS "Target system processor is ARM")
+endif()
+
+
 # Build Logger module
 add_subdirectory(src/logger/cpp_src)
 

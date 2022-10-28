@@ -35,25 +35,29 @@ int main(int argc, char* argv[])
 	    logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 	});
 
-	channel.onReady([]()
+	channel.onReady([&]()
 	{
 		logger.msg(MSG_DEBUG, "Channel is ready\n");
+
+
+		// Use default exhange ("", direct)
+		channel.declareQueue("hello");
+
+		// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
+		// Server will see that the message was acked and can delete it from the queue.
+		channel.consume("hello", AMQP::noack)
+			.onReceived([](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered)
+			{
+				std::string_view body(message.body(), message.bodySize());
+			    logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
+			}
+		);
+
 	});
 
 	// use the channel object to call the AMQP method you like
 
-	// Use default exhange ("", direct)
-	channel.declareQueue("hello");
-
-	// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
-	// Server will see that the message was acked and can delete it from the queue.
-	channel.consume("hello", AMQP::noack)
-		.onReceived([](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered)
-		{
-			std::string_view body(message.body(), message.bodySize());
-		    logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
-		}
-	);
+	
 
 	logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
     myHandler.loop(&connection);

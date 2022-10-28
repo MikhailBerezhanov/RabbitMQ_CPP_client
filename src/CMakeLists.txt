@@ -15,9 +15,16 @@ set(BINS
     # Tutorial 3: Publish/Subscribe
     emit_log
     receive_logs
+
+    # Auto-reconnection test
+    conn_restore
+
+    # Tutorial 4:
+
+    # Tutorial 5:   
 )
 
 foreach(item ${BINS})
     add_executable(${item} "${item}.cpp")
-    target_link_libraries(${item} logger myhandler amqpcpp pthread dl)    
+    target_link_libraries(${item} logger myhandler amqpcpp pthread dl ssl)    
 endforeach(item)
