@@ -33,7 +33,6 @@ private:
 	// Using a smart pointer is a better approach since the pointer takes 
 	// control over the life cycle of the PImpl.
 	std::unique_ptr<Impl> pimpl;
-	// Impl *pimpl = nullptr;
 
 	/**
 	 *  Method that is called by the AMQP library when a new connection
@@ -57,6 +56,7 @@ private:
 	 *  @param  connection      The connection that can now be used
 	 */
 	virtual void onConnected(AMQP::TcpConnection *connection) override;
+
 	/**
 	 *  Method that is called when the secure TLS connection has been established. 
 	 *  This is only called for amqps:// connections. It allows you to inspect
@@ -67,13 +67,7 @@ private:
 	 *  @param  ssl             SSL structure from openssl library
 	 *  @return bool            True if connection can be used
 	 */
-	virtual bool onSecured(AMQP::TcpConnection *connection, const SSL *ssl) override
-	{
-		// @todo
-		//  add your own implementation, for example by reading out the
-		//  certificate and check if it is indeed yours
-		return true;
-	}
+	virtual bool onSecured(AMQP::TcpConnection *connection, const SSL *ssl) override;
 
 	/**
 	 *  Method that is called by the AMQP library when the login attempt

@@ -24,6 +24,8 @@ struct MyTcpHandler::Impl
 
 
 	fd_set readfds;
+	fd_set writefds;
+
 	int fd = -1;
 	int flags = 0;
 	std::atomic<bool> quit{false}; 	// break event loop
@@ -63,12 +65,22 @@ void MyTcpHandler::monitor(AMQP::TcpConnection *connection, int fd, int flags)
 	//  library that the filedescriptor is active by calling the
 	//  connection->process(fd, flags) method.
 
-	if(flags & AMQP::readable){
-		pimpl->fd = fd;
-		pimpl->flags = flags;
+	logger.msg(MSG_VERBOSE, "monitor: fd: %d, flags: %d\n", fd, flags);
 
+	if( !flags ){
+		return;
+	}
+
+	pimpl->fd = fd;
+	pimpl->flags = flags;
+
+	if(flags & AMQP::readable){
 		FD_SET(pimpl->fd, &pimpl->readfds);
 	}
+
+	if(flags & AMQP::writable){
+		FD_SET(pimpl->fd, &pimpl->writefds);
+	}	
 }
 
 uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t interval)
@@ -110,6 +122,9 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		FD_ZERO(&pimpl->readfds);
 		FD_SET(pimpl->fd, &pimpl->readfds);
 
+		FD_ZERO(&pimpl->writefds);
+		// FD_SET(pimpl->fd, &pimpl->writefds);
+
 		timeout.tv_sec = 0;
 		timeout.tv_usec = ms;
 
@@ -117,29 +132,37 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 			max_fd = pimpl->fd + 1;
 		}
 
-		// std::cout << "max_fd: " << max_fd << std::endl;
-
-		int res = select(max_fd, &pimpl->readfds, nullptr, nullptr, &timeout);
+		int res = select(max_fd, &pimpl->readfds, &pimpl->writefds, nullptr, &timeout);
 		
 		if(res < 0 /*&& errno == EINTR*/){
 
 			if( !this->connection_was_lost() ){
-				std::cerr << "MyTcpHanler::loop: select() failed: " << strerror(errno) << std::endl;
+				logger.msg(MSG_ERROR, "%s%s\n", excp_method("select failed(%d): "), strerror(errno), res);
 			}
 			
 			return;
 		}
-		else if( !FD_ISSET(pimpl->fd, &pimpl->readfds) ){
-			// Timeout
+		else{ 	// Timeout or Filedescriptor is ready for I\O
+
+			// Which I\O is ready ?
+
+			if(FD_ISSET(pimpl->fd, &pimpl->readfds)){
+				// logger.msg(MSG_TRACE, "connection->process readable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags);
+				connection->process(pimpl->fd, pimpl->flags);
+			}
+			
+			if(FD_ISSET(pimpl->fd, &pimpl->writefds)){
+				// logger.msg(MSG_TRACE, "connection->process writable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags)
+				connection->process(pimpl->fd, pimpl->flags);
+			}
+
 			if(pimpl->quit.load()){
 				return;
 			}
 
-			continue;
 		}
 
-		// Filedescriptor is ready for I\O
-		connection->process(pimpl->fd, pimpl->flags);
+		
 	}
 }
 
@@ -175,6 +198,25 @@ void MyTcpHandler::onConnected(AMQP::TcpConnection *connection)
 	// @todo
 	//  add your own implementation (probably not needed)
 	std::cout << "onConnected" << std::endl;
+}
+
+/**
+	 *  Method that is called when the secure TLS connection has been established. 
+	 *  This is only called for amqps:// connections. It allows you to inspect
+	 *  whether the connection is secure enough for your liking (you can
+	 *  for example check the server certificate). The AMQP protocol still has
+	 *  to be started.
+	 *  @param  connection      The connection that has been secured
+	 *  @param  ssl             SSL structure from openssl library
+	 *  @return bool            True if connection can be used
+	 */
+bool MyTcpHandler::onSecured(AMQP::TcpConnection *connection, const SSL *ssl)
+{
+	// @todo
+	//  add your own implementation, for example by reading out the
+	//  certificate and check if it is indeed yours
+	std::cout << "onSecured" << std::endl; 
+	return true;
 }
 
 /**

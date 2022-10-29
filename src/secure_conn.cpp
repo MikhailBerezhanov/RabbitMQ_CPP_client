@@ -19,10 +19,11 @@ extern "C"{
 using namespace std;
 
 /*
-	Auto reconnection
+	Secure connection (SSL) with Auto reconnection example.
 */
+
 static std::atomic<int> sig_received{0};
-MyTcpHandler myHandler;
+static MyTcpHandler myHandler;
 
 static inline void signal_handler_init(std::initializer_list<int> signals)
 {
@@ -46,16 +47,16 @@ static inline void signal_handler_init(std::initializer_list<int> signals)
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	signal_handler_init({SIGINT, SIGQUIT, SIGTERM});
 
 	// address of the server
-	std::string addr = argc > 1 ? argv[1] : "amqp://guest:guest@localhost/";
+	std::string addr = argc > 1 ? argv[1] : "amqps://mik:mik@r.socialsystems.ru/";
 
 	// init the SSL library (this works for openssl 1.1, 
 	// for openssl 1.0 use SSL_library_init())
-	// OPENSSL_init_ssl(0, NULL);
+	OPENSSL_init_ssl(0, nullptr);
 
 	AMQP::Address address(addr);
 
@@ -92,9 +93,9 @@ int main(int argc, char* argv[])
 				}
 			);
 
+			logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
 		});
 
-		logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
 		myHandler.loop(connection.get());
 
 		if( myHandler.connection_was_lost() ){
