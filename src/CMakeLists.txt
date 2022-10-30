@@ -19,6 +19,7 @@ set(BINS
     # Auto-reconnection test
     conn_restore
     secure_conn
+    publish
 
     # Tutorial 4:
 
