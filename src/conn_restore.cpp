@@ -77,7 +77,6 @@ int main(int argc, char* argv[])
 
 		// Callback after queue declaration
 		AMQP::QueueCallback qcb = [&](const std::string &name, int msgcount, int consumercount){
-			
 			// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
 			// Server will see that the message was acked and can delete it from the queue.
 			channel.consume("hello", AMQP::noack)
@@ -87,6 +86,8 @@ int main(int argc, char* argv[])
 				    logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
 				}
 			);
+
+			logger.msg(MSG_DEBUG, " [*] Waiting for messages\n");
 		};
 
 		channel.onReady([&]()
@@ -97,7 +98,8 @@ int main(int argc, char* argv[])
 			channel.declareQueue("hello").onSuccess(qcb);
 		});
 
-		logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
+		// Main event loop
+		logger.msg(MSG_DEBUG, " [*] Starting event loop. To exit press CTRL-C\n");
 		myHandler.loop(connection.get());
 
 		// Loop is quited here

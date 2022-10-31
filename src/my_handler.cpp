@@ -30,6 +30,8 @@ struct MyTcpHandler::Impl
 	int flags = 0;
 	std::atomic<bool> quit{false}; 	// break event loop
 	std::atomic<bool> lost{false};	// connection was lost
+
+	uint16_t heartbeat_period = 60;
 };
 
 
@@ -87,20 +89,29 @@ uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t int
 {
 	// we accept the suggestion from the server, but if the interval is smaller
 	// that one minute, we will use a one minute interval instead
-	if (interval < 60) interval = 60;
+	if(interval < 60){
+		interval = 60;
+	} 
 
 	// @todo
 	//  set a timer in your event loop, and make sure that you call
 	//  connection->heartbeat() every _interval_ seconds if no other
 	//  instruction was sent in that period.
 
+	pimpl->heartbeat_period = interval > 1 ? interval / 2 : interval;
+
 	// return the interval that we want to use
 	return interval;
 }
 
+/**
+ *  Method that is called when the server sends a heartbeat to the client
+ *  @param  connection      The connection over which the heartbeat was received
+ *  @see    ConnectionHandler::onHeartbeat
+ */
 void MyTcpHandler::onHeartbeat(AMQP::TcpConnection *connection)
 {
-	logger.msg(MSG_DEBUG, "heartbeat\n");
+	logger.msg(MSG_DEBUG, "heartbeat from server\n");
 	connection->heartbeat();
 }
 
@@ -113,7 +124,11 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 	struct timeval timeout;
 	int max_fd = 1;
 
-	constexpr int ms = 100'1000;	// 100 ms
+	constexpr int tmout_sec = 1;	// 1 s
+	constexpr int tmout_ms = 0;
+
+	
+	int heartbeat_timer = 0;
 
 	pimpl->quit.store(false);
 
@@ -125,8 +140,8 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		FD_ZERO(&pimpl->writefds);
 		// FD_SET(pimpl->fd, &pimpl->writefds);
 
-		timeout.tv_sec = 0;
-		timeout.tv_usec = ms;
+		timeout.tv_sec = tmout_sec;
+		timeout.tv_usec = tmout_ms;
 
 		if(pimpl->fd > -1){
 			max_fd = pimpl->fd + 1;
@@ -160,6 +175,20 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 				return;
 			}
 
+
+			// Simple implementation of hearbeat timer 
+			// TODO: fix
+			if( !FD_ISSET(pimpl->fd, &pimpl->readfds) && !FD_ISSET(pimpl->fd, &pimpl->writefds) ){
+
+				++heartbeat_timer;
+				if(heartbeat_timer > pimpl->heartbeat_period){
+					logger.msg(MSG_DEBUG, "generating heartbeat\n");
+					connection->heartbeat();
+					heartbeat_timer = 0;
+				}
+
+			}
+			
 		}
 
 		
