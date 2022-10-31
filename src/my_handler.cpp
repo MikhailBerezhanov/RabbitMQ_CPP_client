@@ -137,7 +137,7 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 		if(res < 0 /*&& errno == EINTR*/){
 
 			if( !this->connection_was_lost() ){
-				logger.msg(MSG_ERROR, "%s%s\n", excp_method("select failed(%d): "), strerror(errno), res);
+				logger.msg(MSG_ERROR, "%s%s\n", excp_method("select failed(" + std::to_string(res) + "): "), strerror(errno));
 			}
 			
 			return;

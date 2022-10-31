@@ -15,7 +15,7 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	// address of the server
 	AMQP::Address address("amqp://guest:guest@localhost/");
@@ -31,24 +31,31 @@ int main(int argc, char* argv[])
 	{
 		 logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 	});
+
+	AMQP::QueueCallback callback = [&](const std::string &name, int msgcount, int consumercount){
+		// 			(exchange, rounting_key, body, flags)
+		channel.publish("", "hello", "Hello World!");
+		logger.msg(MSG_DEBUG, "[x] Sent '%s' to 'hello' queue\n", "Hello World!");
+		
+		// Gentle closing
+		channel.close().onFinalize([&](){
+			myHandler.quit();
+			connection.close();
+		});
+		
+	};
+
 	channel.onReady([&]()
 	{
 		logger.msg(MSG_DEBUG, "Channel is ready\n");
-
-		// 			(exchange, rounting_key, body, flags)
-		channel.publish("", "hello", "Hello World!");
-		logger.msg(MSG_DEBUG, "[x] Sent 'Hello World!' to 'hello' queue\n");
-		
-		myHandler.quit();
-		channel.close();
-		connection.close();
+		channel.declareQueue("hello").onSuccess(callback);
 	});
 
 	// use the channel object to call the AMQP method you like
 
 	// channel.declareExchange("hello-exchange", AMQP::fanout);
 	// Use default exhange
-	channel.declareQueue("hello");
+	
 	// channel.bindQueue("hello-exchange", "hello", "hello-routing-key");
 
 	myHandler.loop(&connection);

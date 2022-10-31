@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
 
 	// address of the server
 	AMQP::Address address("amqps://mik:mik@r.socialsystems.ru/");
+	// AMQP::Address address("amqp://guest:guest@localhost/");
 
 	// create a AMQP connection object
 	MyTcpHandler myHandler;
@@ -47,9 +48,11 @@ int main(int argc, char* argv[])
 		channel.publish("", "hello", payload);
 		logger.msg(MSG_DEBUG, "[x] Sent '%s' to 'hello' queue\n", payload);
 		
-		myHandler.quit();
-		channel.close();
-		connection.close();
+		// Gentle closing
+		channel.close().onFinalize([&](){
+			myHandler.quit();
+			connection.close();
+		});
 	};
 
 	channel.onReady([&]()

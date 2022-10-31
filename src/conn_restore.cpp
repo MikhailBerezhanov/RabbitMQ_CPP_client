@@ -22,7 +22,7 @@ using namespace std;
 	Auto reconnection
 */
 static std::atomic<int> sig_received{0};
-MyTcpHandler myHandler;
+static MyTcpHandler myHandler;
 
 static inline void signal_handler_init(std::initializer_list<int> signals)
 {
@@ -44,9 +44,10 @@ static inline void signal_handler_init(std::initializer_list<int> signals)
 	}
 }
 
+
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	signal_handler_init({SIGINT, SIGQUIT, SIGTERM});
 
@@ -74,14 +75,9 @@ int main(int argc, char* argv[])
 		    logger.msg(MSG_DEBUG, "Channel error: %s\n", message);
 		});
 
-		channel.onReady([&]()
-		{
-			logger.msg(MSG_DEBUG, "Channel is ready\n");
-
-
-			// Use default exhange ("", direct)
-			channel.declareQueue("hello");
-
+		// Callback after queue declaration
+		AMQP::QueueCallback qcb = [&](const std::string &name, int msgcount, int consumercount){
+			
 			// noack	- 	if set, consumed messages do not have to be acked, this happens automatically
 			// Server will see that the message was acked and can delete it from the queue.
 			channel.consume("hello", AMQP::noack)
@@ -91,28 +87,41 @@ int main(int argc, char* argv[])
 				    logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
 				}
 			);
+		};
 
+		channel.onReady([&]()
+		{
+			logger.msg(MSG_DEBUG, "Channel is ready\n");
+
+			// Use default exhange ("", direct)
+			channel.declareQueue("hello").onSuccess(qcb);
 		});
 
 		logger.msg(MSG_DEBUG, " [*] Waiting for messages. To exit press CTRL-C\n");
 		myHandler.loop(connection.get());
 
-		if( myHandler.connection_was_lost() ){
-			logger.msg(MSG_DEBUG, "Connection was lost. Reconnecting\n");
+		// Loop is quited here
+
+		if(myHandler.connection_was_lost()){
+			logger.msg(MSG_DEBUG, "Connection was lost\n");
+
+			// Gentle current connection closing 
+			connection.get()->close();
+			connection.reset();
+			logger.msg(MSG_DEBUG, "Connection was closed. Reconnecting\n");
 		}
-
-		channel.close();
-		connection.get()->close();
-		connection.reset();
-
-		logger.msg(MSG_DEBUG, "channel, coonection closed\n");
+		else{
+			// channel.close().onFinalize([&](){
+			// 	myHandler.quit();
+			// 	connection.close();
+			// });
+		}
 
 		if(sig_received.load()){
 			return 0;
 		}
 
-		// Prepare for reconnection
-		sleep(5);
+		std::this_thread::sleep_for(std::chrono::seconds(5));
 	}
 	
 	return 0;
