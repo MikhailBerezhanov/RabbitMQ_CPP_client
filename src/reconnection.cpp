@@ -36,23 +36,22 @@ static inline void signal_handler_init(std::initializer_list<int> signals)
 	auto signal_handler = [](int sig_num){ 
 		sig_received.store(sig_num); 
 
+		// Check if opened channel exists
 		if(channel_ptr){
 
 			// Gentle closing
 			channel_ptr->close().onFinalize([&](){
-
-				std::cout << "channel closed\n";
 
 				myHandler.quit();
 
 				if(connection_ptr){
 					connection_ptr->close();
 					connection_ptr.reset();
-					std::cout << "connection closed\n";
 				}
 			});
 		}
 		else{
+			// stop event loop
 			myHandler.quit();
 		}
 	};
@@ -75,12 +74,14 @@ int main(int argc, char* argv[])
 
 	signal_handler_init({SIGINT, SIGQUIT, SIGTERM});
 
-	// address of the server
+	// Address of the server
 	std::string addr = argc > 1 ? argv[1] : "amqp://guest:guest@localhost/";
 
-	// init the SSL library (this works for openssl 1.1, 
-	// for openssl 1.0 use SSL_library_init())
-	// OPENSSL_init_ssl(0, NULL);
+	// For secure connections (TLS) use 'amqps://' address.
+	// And init the SSL library:
+	//
+	// (for openssl 1.1: OPENSSL_init_ssl(0, nullptr); ) 
+	// (for openssl 1.0 use SSL_library_init(); ) 
 
 	AMQP::Address address(addr);
 

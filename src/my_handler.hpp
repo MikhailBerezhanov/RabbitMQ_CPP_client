@@ -37,7 +37,7 @@ private:
 	// control over the life cycle of the PImpl.
 	std::unique_ptr<Impl> pimpl;
 
-	void update_heartbeats(AMQP::TcpConnection *connection);
+	void process_heartbeats(AMQP::TcpConnection *connection);
 
 	/**
 	 *  Method that is called by the AMQP library when a new connection

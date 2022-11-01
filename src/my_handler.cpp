@@ -21,12 +21,13 @@ struct MyTcpHandler::Impl
 
 	int fd = -1;
 	int flags = 0;
-	std::atomic<bool> quit{false}; 	// break event loop
-	std::atomic<bool> lost{false};	// connection was lost
+	std::atomic<bool> quit{false}; 			// break event loop flag
+	std::atomic<bool> connected{false};		// connection is active flag
 
-	uint16_t heartbeat_period = 30;	// interval / 2
-	std::atomic<uint16_t> heartbeats{0};
-	uint8_t heartbeat_fails = 0;
+	// Heartbeats data
+	uint16_t heartbeat_period = 30;			// (interval \ 2)
+	std::atomic<uint16_t> heartbeats_timer{0};	//
+	uint8_t heartbeat_fails = 0;			//
 	static constexpr uint8_t heartbeat_max_fails = 2;
 };
 
@@ -67,7 +68,7 @@ void MyTcpHandler::monitor(AMQP::TcpConnection *connection, int fd, int flags)
 	//  library that the filedescriptor is active by calling the
 	//  connection->process(fd, flags) method.
 
-	logger.msg(MSG_VERBOSE, "monitor: fd: %d, flags: %d\n", fd, flags);
+	logger.msg(MSG_TRACE, "monitor: fd: %d, flags: %d\n", fd, flags);
 
 	if( !flags ){
 		return;
@@ -75,6 +76,8 @@ void MyTcpHandler::monitor(AMQP::TcpConnection *connection, int fd, int flags)
 
 	pimpl->fd = fd;
 	pimpl->flags = flags;
+
+	// Adding the file descriptor to the event loop
 
 	if(flags & AMQP::readable){
 		FD_SET(pimpl->fd, &pimpl->readfds);
@@ -100,10 +103,9 @@ uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t int
 
 	pimpl->heartbeat_period = interval > 1 ? interval / 2 : interval;
 
-	// return the interval that we want to use
-
 	log_msg(MSG_DEBUG, "Heartbeat interval: %u, period: %u\n", interval, pimpl->heartbeat_period);
 
+	// return the interval that we want to use
 	return interval;
 }
 
@@ -120,45 +122,47 @@ void MyTcpHandler::onHeartbeat(AMQP::TcpConnection *connection)
 	// Server send us heartbeat frame, so 
 	// no need to request heartbeat at current period 
 	this->reset_heartbeats();
-	pimpl->heartbeat_fails = 0;
 }
 
 void MyTcpHandler::reset_heartbeats()
 {
-	pimpl->heartbeats.store(0);
+	pimpl->heartbeats_timer.store(0);
+	pimpl->heartbeat_fails = 0;
 }
 
-void MyTcpHandler::update_heartbeats(AMQP::TcpConnection *connection)
+void MyTcpHandler::process_heartbeats(AMQP::TcpConnection *connection)
 {
-	uint16_t heartbeats_incremented = pimpl->heartbeats.load() + 1;
+	uint16_t heartbeats_incremented = pimpl->heartbeats_timer.load() + 1;
 
-	if(heartbeats_incremented >= pimpl->heartbeat_period){
-		
-		if(connection->heartbeat()){
-			logger.msg(MSG_DEBUG, "heartbeat sent to server\n");
-			pimpl->heartbeat_fails = 0;
-		}
-		else{
-			++pimpl->heartbeat_fails;
-			logger.msg(MSG_DEBUG, "heartbeat to server failed (%d)\n", pimpl->heartbeat_fails);
+	if(heartbeats_incremented < pimpl->heartbeat_period){
+		pimpl->heartbeats_timer.store(heartbeats_incremented);
+		return;
+	}
 
-			if(pimpl->heartbeat_fails >= Impl::heartbeat_max_fails){
-				// Connection lost 
-				this->onLost(connection);
-			}
-		}
+	// Heartbeats timer period elapsed
 
+	if(connection->heartbeat()){
+		logger.msg(MSG_DEBUG, "heartbeat sent to server\n");
 		this->reset_heartbeats();
 	}
 	else{
-		pimpl->heartbeats.store(heartbeats_incremented);
+		++pimpl->heartbeat_fails;
+		logger.msg(MSG_DEBUG, "heartbeat to server failed (%d)\n", pimpl->heartbeat_fails);
+
+		if(pimpl->heartbeat_fails >= Impl::heartbeat_max_fails){
+			// Connection lost 
+			this->onLost(connection);
+		}
+
+		// Reset heartbeats timer only 
+		pimpl->heartbeats_timer.store(0);
 	}
+
 }
 
-// TODO: spawn independent thread for the loop
-//
-// TODO: make connection auto-reconnect - use pointer to pointer or shared_ptr
-//
+// Event loop reports that the descriptor becomes readable and/or writable 
+// and informs the AMQP-CPP library that the filedescriptor is active 
+// by calling the connection->process(fd, flags) method.
 void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 {
 	struct timeval timeout;
@@ -168,16 +172,15 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 	constexpr int tmout_ms = 0;
 
 	pimpl->quit.store(false);
+	pimpl->connected.store(false);
 	this->reset_heartbeats();
 
 	for(;;){
 
 		FD_ZERO(&pimpl->readfds);
-		FD_SET(pimpl->fd, &pimpl->readfds);
-
 		FD_ZERO(&pimpl->writefds);
-		// FD_SET(pimpl->fd, &pimpl->writefds);
-
+		FD_SET(pimpl->fd, &pimpl->readfds);
+		
 		timeout.tv_sec = tmout_sec;
 		timeout.tv_usec = tmout_ms;
 
@@ -201,27 +204,32 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 
 			return;
 		}
-		else{ 	// Timeout or Filedescriptor is ready for I\O
+		else{ 	
+			// Timeout or Filedescriptor is ready for I\O
 
-			// Which I\O is ready ?
-
+			// Process I\O operations
 			if(FD_ISSET(pimpl->fd, &pimpl->readfds)){
-				// logger.msg(MSG_TRACE, "connection->process readable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags);
+				// logger.msg(MSG_VERBOSE, "connection->process readable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags);
 				connection->process(pimpl->fd, pimpl->flags);
 			}
 			
 			if(FD_ISSET(pimpl->fd, &pimpl->writefds)){
-				// logger.msg(MSG_TRACE, "connection->process writable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags)
+				// logger.msg(MSG_VERBOSE, "connection->process writable (fd: %d, flags: %d)\n", pimpl->fd, pimpl->flags);
 				connection->process(pimpl->fd, pimpl->flags);
+
+				// Any traffic (e.g. protocol operations, published messages, 
+				// acknowledgements) counts for a valid heartbeat.
+				pimpl->heartbeats_timer.store(0);
 			}
 
+			// Check if loop break signal was catched
 			if(pimpl->quit.load()){
 				return;
 			}
 
-			// Simple implementation of hearbeats timer 
-			if( !FD_ISSET(pimpl->fd, &pimpl->readfds) ){
-				this->update_heartbeats(connection);
+			// Hearbeats timer implementation - when select timeouts,increment timer counter. 
+			if( !FD_ISSET(pimpl->fd, &pimpl->readfds) && !FD_ISSET(pimpl->fd, &pimpl->writefds) ){
+				this->process_heartbeats(connection);
 			}
 			
 		}
@@ -235,15 +243,11 @@ void MyTcpHandler::quit()
 
 bool MyTcpHandler::connection_was_lost() const
 {
-	bool res = pimpl->lost.load();
-
-	if(res){
-		pimpl->lost.store(false);
-	}
-
-	return res;
+	return !pimpl->connected.load();
 }
 
+
+// Asynchronous callbacks (are called during event loop)
 
 // Opening methods
 
@@ -259,25 +263,26 @@ void MyTcpHandler::onConnected(AMQP::TcpConnection *connection)
 {
 	// @todo
 	//  add your own implementation (probably not needed)
-	std::cout << "onConnected" << std::endl;
+	logger.msg(MSG_DEBUG, "onConnected\n");
+	pimpl->connected.store(true);
 }
 
 /**
-	 *  Method that is called when the secure TLS connection has been established. 
-	 *  This is only called for amqps:// connections. It allows you to inspect
-	 *  whether the connection is secure enough for your liking (you can
-	 *  for example check the server certificate). The AMQP protocol still has
-	 *  to be started.
-	 *  @param  connection      The connection that has been secured
-	 *  @param  ssl             SSL structure from openssl library
-	 *  @return bool            True if connection can be used
-	 */
+ *  Method that is called when the secure TLS connection has been established. 
+ *  This is only called for amqps:// connections. It allows you to inspect
+ *  whether the connection is secure enough for your liking (you can
+ *  for example check the server certificate). The AMQP protocol still has
+ *  to be started.
+ *  @param  connection      The connection that has been secured
+ *  @param  ssl             SSL structure from openssl library
+ *  @return bool            True if connection can be used
+ */
 bool MyTcpHandler::onSecured(AMQP::TcpConnection *connection, const SSL *ssl)
 {
 	// @todo
 	//  add your own implementation, for example by reading out the
 	//  certificate and check if it is indeed yours
-	std::cout << "onSecured" << std::endl; 
+	logger.msg(MSG_DEBUG, "onSecured\n");
 	return true;
 }
 
@@ -291,7 +296,7 @@ void MyTcpHandler::onReady(AMQP::TcpConnection *connection)
 	// @todo
 	//  add your own implementation, for example by creating a channel
 	//  instance, and start publishing or consuming
-	std::cout << "onReady" << std::endl;
+	logger.msg(MSG_DEBUG, "onReady\n");
 }
 
 
@@ -303,7 +308,7 @@ void MyTcpHandler::onError(AMQP::TcpConnection *connection, const char *message)
 	// @todo
 	//  add your own implementation, for example by reporting the error
 	//  to the user of your program and logging the error
-	std::cerr << "onError: " << message << std::endl;
+	logger.msg(MSG_ERROR, "onError: %s\n", message);
 }
 
 /**
@@ -321,7 +326,7 @@ void MyTcpHandler::onClosed(AMQP::TcpConnection *connection)
     //  be useful if you want to do some something immediately after the
     //  amqp connection is over, but do not want to wait for the tcp 
     //  connection to shut down
-    std::cout << "onClosed" << std::endl;
+    logger.msg(MSG_DEBUG, "onClosed\n");
 }
 
 /**
@@ -333,14 +338,11 @@ void MyTcpHandler::onLost(AMQP::TcpConnection *connection)
 {
 	// @todo
 	//  add your own implementation (probably not necessary)
-	std::cout << "onLost" << std::endl;
-	pimpl->lost.store(true);
+	logger.msg(MSG_DEBUG, "onLost\n");
+	pimpl->connected.store(false);
 
-	// We've been connected already, event loop is running by 
-	// current time - stop it gently. 
+	// We've been connected already, stop running event gently.
 	this->quit();
-
-	// TODO: Try to perform auto-reconnect. 
 }
 
 /**
@@ -352,5 +354,5 @@ void MyTcpHandler::onDetached(AMQP::TcpConnection *connection)
 {
 	// @todo
 	//  add your own implementation, like cleanup resources or exit the application
-	std::cout << "onDetached" << std::endl;
+	logger.msg(MSG_TRACE, "onDetached\n");
 } 

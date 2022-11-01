@@ -25,7 +25,6 @@ set(BINS
 
     # Misc tests
 	reconnection
-	secure_conn
 	publish
 )
 
