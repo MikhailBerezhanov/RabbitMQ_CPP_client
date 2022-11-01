@@ -16,13 +16,6 @@ extern "C"{
 
 struct MyTcpHandler::Impl
 {
-
-	// The reason to declare explicitly a destructor is that when compiling, 
-	// the smart pointer ( std::unique_ptr ) checks if in the definition of 
-	// the type exists a visible destructor and throws a compilation error 
-	// if it’s only forward declared.
-
-
 	fd_set readfds;
 	fd_set writefds;
 
@@ -31,7 +24,10 @@ struct MyTcpHandler::Impl
 	std::atomic<bool> quit{false}; 	// break event loop
 	std::atomic<bool> lost{false};	// connection was lost
 
-	uint16_t heartbeat_period = 60;
+	uint16_t heartbeat_period = 30;	// interval / 2
+	std::atomic<uint16_t> heartbeats{0};
+	uint8_t heartbeat_fails = 0;
+	static constexpr uint8_t heartbeat_max_fails = 2;
 };
 
 
@@ -41,6 +37,10 @@ MyTcpHandler::MyTcpHandler(): AMQP::TcpHandler(), pimpl(new MyTcpHandler::Impl)
 }
 
 // Definition of desctuctor in place where MyTcpHandlerImpl is a complete type.
+// The reason to definition explicitly a destructor is that when compiling, 
+// the smart pointer ( std::unique_ptr ) checks if in the definition of 
+// the type exists a visible destructor and throws a compilation error 
+// if it’s only forward declared.
 MyTcpHandler::~MyTcpHandler() = default;
 
 
@@ -101,6 +101,9 @@ uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t int
 	pimpl->heartbeat_period = interval > 1 ? interval / 2 : interval;
 
 	// return the interval that we want to use
+
+	log_msg(MSG_DEBUG, "Heartbeat interval: %u, period: %u\n", interval, pimpl->heartbeat_period);
+
 	return interval;
 }
 
@@ -111,8 +114,45 @@ uint16_t MyTcpHandler::onNegotiate(AMQP::TcpConnection *connection, uint16_t int
  */
 void MyTcpHandler::onHeartbeat(AMQP::TcpConnection *connection)
 {
-	logger.msg(MSG_DEBUG, "heartbeat from server\n");
+	logger.msg(MSG_DEBUG, "heartbeat received from server\n");
 	connection->heartbeat();
+
+	// Server send us heartbeat frame, so 
+	// no need to request heartbeat at current period 
+	this->reset_heartbeats();
+	pimpl->heartbeat_fails = 0;
+}
+
+void MyTcpHandler::reset_heartbeats()
+{
+	pimpl->heartbeats.store(0);
+}
+
+void MyTcpHandler::update_heartbeats(AMQP::TcpConnection *connection)
+{
+	uint16_t heartbeats_incremented = pimpl->heartbeats.load() + 1;
+
+	if(heartbeats_incremented >= pimpl->heartbeat_period){
+		
+		if(connection->heartbeat()){
+			logger.msg(MSG_DEBUG, "heartbeat sent to server\n");
+			pimpl->heartbeat_fails = 0;
+		}
+		else{
+			++pimpl->heartbeat_fails;
+			logger.msg(MSG_DEBUG, "heartbeat to server failed (%d)\n", pimpl->heartbeat_fails);
+
+			if(pimpl->heartbeat_fails >= Impl::heartbeat_max_fails){
+				// Connection lost 
+				this->onLost(connection);
+			}
+		}
+
+		this->reset_heartbeats();
+	}
+	else{
+		pimpl->heartbeats.store(heartbeats_incremented);
+	}
 }
 
 // TODO: spawn independent thread for the loop
@@ -127,10 +167,8 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 	constexpr int tmout_sec = 1;	// 1 s
 	constexpr int tmout_ms = 0;
 
-	
-	int heartbeat_timer = 0;
-
 	pimpl->quit.store(false);
+	this->reset_heartbeats();
 
 	for(;;){
 
@@ -149,12 +187,18 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 
 		int res = select(max_fd, &pimpl->readfds, &pimpl->writefds, nullptr, &timeout);
 		
-		if(res < 0 /*&& errno == EINTR*/){
+		if(res < 0){
+
+			// Signals breaks select() call, we will handle signals manually
+			// (with this->quit()) for gentle channel and connection closing
+			if(errno == EINTR){
+				continue;	
+			}
 
 			if( !this->connection_was_lost() ){
 				logger.msg(MSG_ERROR, "%s%s\n", excp_method("select failed(" + std::to_string(res) + "): "), strerror(errno));
 			}
-			
+
 			return;
 		}
 		else{ 	// Timeout or Filedescriptor is ready for I\O
@@ -175,23 +219,12 @@ void MyTcpHandler::loop(AMQP::TcpConnection *connection)
 				return;
 			}
 
-
-			// Simple implementation of hearbeat timer 
-			// TODO: fix
-			if( !FD_ISSET(pimpl->fd, &pimpl->readfds) && !FD_ISSET(pimpl->fd, &pimpl->writefds) ){
-
-				++heartbeat_timer;
-				if(heartbeat_timer > pimpl->heartbeat_period){
-					logger.msg(MSG_DEBUG, "generating heartbeat\n");
-					connection->heartbeat();
-					heartbeat_timer = 0;
-				}
-
+			// Simple implementation of hearbeats timer 
+			if( !FD_ISSET(pimpl->fd, &pimpl->readfds) ){
+				this->update_heartbeats(connection);
 			}
 			
 		}
-
-		
 	}
 }
 

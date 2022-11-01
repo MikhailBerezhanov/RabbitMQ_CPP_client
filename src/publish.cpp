@@ -28,8 +28,10 @@ int main(int argc, char* argv[])
 	std::string payload = argc > 1 ? utils::join(&argv[1], &argv[argc], " ") : "Test message";
 
 	// address of the server
-	AMQP::Address address("amqps://mik:mik@r.socialsystems.ru/");
-	// AMQP::Address address("amqp://guest:guest@localhost/");
+	// AMQP::Address address("amqps://mik:mik@r.socialsystems.ru/");
+	AMQP::Address address("amqp://guest:guest@localhost/");
+
+	logger.msg(MSG_DEBUG, "Connecting to '%s'\n", std::string(address));
 
 	// create a AMQP connection object
 	MyTcpHandler myHandler;

@@ -6,27 +6,30 @@ target_link_libraries(myhandler amqpcpp logger)
 
 # Tutorials' binaries
 set(BINS	
-    # Tutorial 1: 'Hello world' 
+	# Tutorial 1: 'Hello world' 
 	send
-    receive
-    # Tutoril 2: Work Queues
-    new_task
-    worker
-    # Tutorial 3: Publish/Subscribe
-    emit_log
-    receive_logs
+	receive
+	# Tutoril 2: Work Queues
+	new_task
+	worker
+	# Tutorial 3: Publish/Subscribe
+	emit_log
+	receive_logs
 
-    # Auto-reconnection test
-    conn_restore
-    secure_conn
-    publish
 
-    # Tutorial 4:
 
-    # Tutorial 5:   
+	# Tutorial 4:
+
+	# Tutorial 5:   
+
+
+    # Misc tests
+	reconnection
+	secure_conn
+	publish
 )
 
 foreach(item ${BINS})
-    add_executable(${item} "${item}.cpp")
-    target_link_libraries(${item} logger myhandler amqpcpp pthread dl ssl)    
+	add_executable(${item} "${item}.cpp")
+	target_link_libraries(${item} logger myhandler amqpcpp pthread dl ssl)    
 endforeach(item)
