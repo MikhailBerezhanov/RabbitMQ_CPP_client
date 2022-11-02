@@ -23,7 +23,7 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	// 'Heavy' message to be processed by workers 
 	std::string payload = argc > 1 ? utils::join(&argv[1], &argv[argc], " ") : "NewTask message";

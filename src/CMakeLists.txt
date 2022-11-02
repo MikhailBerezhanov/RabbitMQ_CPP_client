@@ -16,14 +16,19 @@ set(BINS
 	emit_log
 	receive_logs
 
+	# Tutorial 4: Routing
+	emit_log_direct
+	receive_logs_direct
 
+	# Tutorial 5: Topics  
+	emit_log_topic
+	receive_logs_topic
 
-	# Tutorial 4:
+	# Tutorial 6: Remote Procedure call (RPC)
 
-	# Tutorial 5:   
+	# Tutorial 7: Publisher Confirms 
 
-
-    # Misc tests
+    # Demos with secure connection (TLS) support
 	reconnection
 	publish
 )

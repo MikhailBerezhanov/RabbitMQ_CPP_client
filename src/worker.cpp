@@ -20,7 +20,7 @@ using namespace std::chrono_literals;
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	// address of the server
 	AMQP::Address address("amqp://guest:guest@localhost/");

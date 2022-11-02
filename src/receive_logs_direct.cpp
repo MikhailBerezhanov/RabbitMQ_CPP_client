@@ -10,23 +10,29 @@
 using namespace std;
 
 /*
-	Tutorial #3: Publish/Subscribe
+	Tutorial #4: Routing
 
-	To illustrate the pattern, we're going to build a simple logging system. 
-	It will consist of two programs -- the first will emit log messages and 
-	the second will receive and print them.
-
-	In our logging system every running copy of the receiver program will 
-	get the messages. That way we'll be able to run one receiver and direct 
-	the logs to disk; and at the same time we'll be able to run another receiver 
-	and see the logs on the screen.
-
-	Essentially, published log messages are going to be broadcast to all the receivers.
+	In this tutorial we're going to add a feature to log system - 
+	we're going to make it possible to subscribe only to a subset 
+	of the messages. For example, we will be able to direct only 
+	critical error messages to the log file (to save disk space), 
+	while still being able to print all of the log messages on the console.
 */
 
 int main(int argc, char* argv[])
 {
 	logger.init(MSG_DEBUG);
+
+	std::vector<std::string> severities;
+
+	for(int i = 1; i < argc; ++i){
+		severities.push_back(argv[i]);
+	}
+
+	if(severities.empty()){
+		std::cerr << "Usage: " << argv[0] << " [info] [warning] [error]" << std::endl;
+		return 0;
+	}
 
 	// address of the server
 	AMQP::Address address("amqp://guest:guest@localhost/");
@@ -47,16 +53,17 @@ int main(int argc, char* argv[])
 	auto reveive_callback = [](const AMQP::Message &message, uint64_t deliveryTag, bool redelivered)
 	{
 		std::string_view body(message.body(), message.bodySize());
-		logger.msg(MSG_DEBUG, " [x] Received '%s' (%lu bytes)\n", body.data(), message.bodySize());
+		logger.msg(MSG_DEBUG, " [x] Received %s:%s\n", message.routingkey(), body.data());
 	};
 
-	// Create fanout exchange (routes message to every binded queue)
+	// Create direct exchange (routes message to binded queue 
+	// with exactly matching routing_key)
 	// ** to see excnahes use:
 	//
 	// sudo rabbitmqctl list_exchanges
 	// rabbitmqctl list_bindings
 	//
-	channel.declareExchange("logs", AMQP::fanout)
+	channel.declareExchange("direct_logs", AMQP::direct)
 		.onSuccess([&]()
 		{
 			// Use randomly named-by-server queue. Make it exclusive (the queue only exists 
@@ -67,7 +74,14 @@ int main(int argc, char* argv[])
 					// name contains a random queue name. 
 					// For example it may look like amq.gen-JzTY20BRgKO-HjmUJj0wLg
 					logger.msg(MSG_DEBUG, "Generated queue name: %s\n", name);
-					channel.bindQueue("logs", name, name + "-routing-key");
+
+					for(const auto &severity : severities){
+						// A binding is a relationship between an exchange and a queue. 
+						// This can be simply read as: the queue is interested in messages 
+						// from this exchange.
+						channel.bindQueue("direct_logs", name, severity);
+					}
+					
 					channel.consume(name, AMQP::noack).onReceived(reveive_callback);
 				}
 			);

@@ -11,11 +11,21 @@ using namespace std;
 
 /*
 	Tutorial #3: Publish/Subscribe
+
+	We're going to build a simple logging system. It will consist of two programs 
+	-- the first will emit log messages and
+	-- the second will receive and print them.
+
+	In our logging system every running copy of the receiver program will get the messages. 
+	That way we'll be able to run one receiver and direct the logs to disk; and at the same 
+	time we'll be able to run another receiver and see the logs on the screen.
+
+	Essentially, published log messages are going to be broadcast to all the receivers.
 */
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	std::string payload = argc > 1 ? utils::join(&argv[1], &argv[argc], " ") : "payload";
 

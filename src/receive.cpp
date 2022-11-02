@@ -15,7 +15,7 @@ using namespace std;
 
 int main(int argc, char* argv[])
 {
-	logger.init(MSG_TRACE);
+	logger.init(MSG_DEBUG);
 
 	// address of the server
 	std::string addr = argc > 1 ? argv[1] : "amqp://guest:guest@localhost/";

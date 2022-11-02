@@ -82,6 +82,7 @@ int main(int argc, char* argv[])
 	//
 	// (for openssl 1.1: OPENSSL_init_ssl(0, nullptr); ) 
 	// (for openssl 1.0 use SSL_library_init(); ) 
+	OPENSSL_init_ssl(0, nullptr);
 
 	AMQP::Address address(addr);
 
@@ -89,11 +90,11 @@ int main(int argc, char* argv[])
 		logger.msg(MSG_DEBUG, "Connecting to '%s'\n", addr);
 
 		// Create a AMQP connection_ptr object
-		connection_ptr = std::unique_ptr<AMQP::TcpConnection>(new AMQP::TcpConnection(&myHandler, address));
+		connection_ptr = std::make_unique<AMQP::TcpConnection>(&myHandler, address);
 
 		// And create a channel
 		// AMQP::TcpChannel channel(connection_ptr.get());
-		channel_ptr = std::unique_ptr<AMQP::TcpChannel>(new AMQP::TcpChannel(connection_ptr.get()));
+		channel_ptr =  std::make_unique<AMQP::TcpChannel>(connection_ptr.get());
 
 		// Setup asynchronous callbacks
 		channel_ptr->onError([](const char* message)
