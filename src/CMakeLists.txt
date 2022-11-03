@@ -25,6 +25,8 @@ set(BINS
 	receive_logs_topic
 
 	# Tutorial 6: Remote Procedure call (RPC)
+	rpc_client
+	rpc_server
 
 	# Tutorial 7: Publisher Confirms 
 
