@@ -29,6 +29,7 @@ set(BINS
 	rpc_server
 
 	# Tutorial 7: Publisher Confirms 
+	p_confirms
 
     # Demos with secure connection (TLS) support
 	reconnection

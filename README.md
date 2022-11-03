@@ -78,3 +78,6 @@ cmake --build .
 
     rpc_server
     rpc_client
+
+[Tutorial seven: Publisher Confirms](https://www.rabbitmq.com/tutorials/tutorial-seven-java.html)
+    

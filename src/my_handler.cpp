@@ -16,6 +16,8 @@ extern "C"{
 
 struct MyTcpHandler::Impl
 {
+	AMQP::TcpConnection *connection_ptr = nullptr;
+
 	fd_set readfds;
 	fd_set writefds;
 
@@ -250,6 +252,21 @@ bool MyTcpHandler::connection_was_lost() const
 // Asynchronous callbacks (are called during event loop)
 
 // Opening methods
+
+/**
+ *  Method that is called by the AMQP library when a new connection
+ *  is associated with the handler. This is the first call to your handler
+ *  @param  connection      The connection that is attached to the handler
+ */
+void MyTcpHandler::onAttached(AMQP::TcpConnection *connection)
+{
+	// @todo
+	//  add your own implementation, for example initialize things
+	//  to handle the connection.
+	logger.msg(MSG_VERBOSE, "onAttached\n");
+	pimpl->connection_ptr = connection;
+}
+
 
 /**
  *  Method that is called by the AMQP library when the TCP connection 

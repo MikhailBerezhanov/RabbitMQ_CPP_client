@@ -5,6 +5,14 @@
 #include <amqpcpp.h>
 #include <amqpcpp/linux_tcp.h>
 
+/* DISCLAIMER:
+ *
+ * Watch out: do not use threads! AMQP-CPP objects are not thread-safe _by design_. 
+ * If you construct channels or call methods from one thread, while the event loop 
+ * is running in a different thread, unexpected things can and will happen.
+ *
+*/
+
 class MyTcpHandler : public AMQP::TcpHandler
 {
 public:
@@ -44,13 +52,7 @@ private:
 	 *  is associated with the handler. This is the first call to your handler
 	 *  @param  connection      The connection that is attached to the handler
 	 */
-	// virtual void onAttached(AMQP::TcpConnection *connection) override
-	// {
-	// 	// @todo
-	// 	//  add your own implementation, for example initialize things
-	// 	//  to handle the connection.
-	// 	std::cout << "onAttached" << std::endl;
-	// }
+	virtual void onAttached(AMQP::TcpConnection *connection) override;
 
 	/**
 	 *  Method that is called by the AMQP library when the TCP connection 
